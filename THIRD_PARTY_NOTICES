@@ -1,0 +1,7 @@
+fluttertoast
+https://github.com/ponnamkarthik/FlutterToast
+MIT License
+
+The Android custom Toast view and the iOS overlay timing follow that package's
+message presentation, including its bundled UIView+Toast category. The category
+originates with Charles Scalesse and is MIT licensed inside fluttertoast.
