@@ -5,52 +5,69 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace DotNative.Toast;
 
+// ─────────────────────────────────────────────────────────────
+// Public API
+// ─────────────────────────────────────────────────────────────
+
 public interface IToast
 {
-    Task ShowAsync(string message, CancellationToken cancellationToken = default);
+    Task ShowAsync(
+        string message,
+        CancellationToken cancellationToken = default);
 }
+
+// ─────────────────────────────────────────────────────────────
+// Dependency Injection
+// ─────────────────────────────────────────────────────────────
 
 public static class ToastServices
 {
-    public static IServiceCollection AddToast(this IServiceCollection services)
+    public static IServiceCollection AddToast(
+        this IServiceCollection services)
     {
-        services.TryAddSingleton<IToast, RoutingToast>();
+        services.TryAddSingleton<IToast, ToastService>();
         return services;
     }
 }
 
-internal sealed class RoutingToast(
+// ─────────────────────────────────────────────────────────────
+// Implementation
+// ─────────────────────────────────────────────────────────────
+
+internal sealed class ToastService(
     IPlatformChannels channels,
     PresentationTarget target,
     IOverlayPresenter overlays
 ) : IToast
 {
-    public Task ShowAsync(string message, CancellationToken cancellationToken = default)
+    private const string ChannelName = "dotnative.toast";
+
+    private bool IsDesktop =>
+        target.Platform is NativePlatform.Windows or NativePlatform.Linux;
+
+    public Task ShowAsync(
+        string message,
+        CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(message);
+
         if (message.Length > 2_000)
             throw new ArgumentOutOfRangeException(nameof(message));
-        return target.Platform is NativePlatform.Windows or NativePlatform.Linux
-            ? new DesktopToast(overlays).ShowAsync(message, cancellationToken)
-            : new ChannelToast(channels).ShowAsync(message, cancellationToken);
-    }
-}
 
-internal sealed class ChannelToast(IPlatformChannels channels)
-{
-    public Task ShowAsync(string message, CancellationToken cancellationToken) =>
-        channels
-            .Get("dotnative.toast")
-            .InvokeAsync(
+        return IsDesktop
+            ? new DesktopToast(overlays).ShowAsync(message, cancellationToken)
+            : channels.Get(ChannelName).InvokeAsync(
                 "show",
                 new Dictionary<string, object?> { ["message"] = message },
-                cancellationToken
-            );
+                cancellationToken);
+    }
 }
 
 internal sealed class DesktopToast(IOverlayPresenter overlays)
 {
-    public async Task ShowAsync(string message, CancellationToken cancellationToken)
+    public async Task ShowAsync(
+        string message,
+        CancellationToken cancellationToken)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(
